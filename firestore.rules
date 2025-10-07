@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regras para usuários
+    match /users/{userId} {
+      // Usuários podem ler e escrever apenas seus próprios dados
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Regras para posts
+    match /posts/{postId} {
+      // Permitir leitura de posts públicos para usuários autenticados
+      allow read: if request.auth != null && 
+        (resource.data.isPublic == true || resource.data.userId == request.auth.uid);
+      
+      // Permitir criação de posts para usuários autenticados
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId &&
+        // Validar campos obrigatórios
+        request.resource.data.keys().hasAll(['title', 'content', 'userId', 'tags', 'isPublic']) &&
+        // Validar tipos
+        request.resource.data.title is string &&
+        request.resource.data.content is string &&
+        request.resource.data.userId is string &&
+        request.resource.data.tags is list &&
+        request.resource.data.isPublic is bool;
+      
+      // Permitir atualização apenas pelo dono do post
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.userId &&
+        // Não permitir mudança do userId
+        request.resource.data.userId == resource.data.userId;
+      
+      // Permitir exclusão apenas pelo dono do post
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+
+    // Regras para pastas
+    match /folders/{folderId} {
+      // Permitir leitura de pastas públicas para usuários autenticados
+      allow read: if request.auth != null && 
+        (resource.data.isPublic == true || resource.data.userId == request.auth.uid);
+      
+      // Permitir criação de pastas para usuários autenticados
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId &&
+        // Validar campos obrigatórios
+        request.resource.data.keys().hasAll(['name', 'userId', 'color', 'icon', 'isPublic']) &&
+        // Validar tipos
+        request.resource.data.name is string &&
+        request.resource.data.userId is string &&
+        request.resource.data.color is string &&
+        request.resource.data.icon is string &&
+        request.resource.data.isPublic is bool;
+      
+      // Permitir atualização apenas pelo dono da pasta
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.userId &&
+        // Não permitir mudança do userId
+        request.resource.data.userId == resource.data.userId;
+      
+      // Permitir exclusão apenas pelo dono da pasta
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+
+    // Regras para curtidas
+    match /likes/{likeId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if request.auth != null;
+      
+      // Permitir criação apenas pelo próprio usuário
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId &&
+        // Validar campos obrigatórios
+        request.resource.data.keys().hasAll(['userId', 'postId']) &&
+        // Validar tipos
+        request.resource.data.userId is string &&
+        request.resource.data.postId is string;
+      
+      // Permitir exclusão apenas pelo próprio usuário
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+
+    // Regras para comentários
+    match /comments/{commentId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if request.auth != null;
+      
+      // Permitir criação para usuários autenticados
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId &&
+        // Validar campos obrigatórios
+        request.resource.data.keys().hasAll(['content', 'userId', 'postId']) &&
+        // Validar tipos
+        request.resource.data.content is string &&
+        request.resource.data.userId is string &&
+        request.resource.data.postId is string;
+      
+      // Permitir atualização apenas pelo autor do comentário
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.userId &&
+        // Não permitir mudança do userId e postId
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.postId == resource.data.postId;
+      
+      // Permitir exclusão pelo autor do comentário
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+
+    // Função auxiliar para validar se um post existe e é público
+    function postExistsAndIsPublic(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId)) &&
+        get(/databases/$(database)/documents/posts/$(postId)).data.isPublic == true;
+    }
+
+    // Função auxiliar para validar se uma pasta existe e é pública
+    function folderExistsAndIsPublic(folderId) {
+      return exists(/databases/$(database)/documents/folders/$(folderId)) &&
+        get(/databases/$(database)/documents/folders/$(folderId)).data.isPublic == true;
+    }
+  }
+}
